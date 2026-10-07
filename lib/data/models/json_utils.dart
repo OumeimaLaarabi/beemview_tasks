@@ -20,6 +20,17 @@ DateTime? readDate(dynamic value) {
   return DateTime.tryParse(value)?.toLocal();
 }
 
+/// For calendar-date fields (due/start date). The API sends them as UTC
+/// midnight (`2026-10-10T00:00:00Z`); converting that to local time would
+/// show Oct 9 west of UTC, so the date is taken as written and returned as
+/// a local midnight with no time component.
+DateTime? readDateOnly(dynamic value) {
+  if (value is! String || value.isEmpty) return null;
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return null;
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
 Map<String, dynamic>? readMap(dynamic value) =>
     value is Map ? Map<String, dynamic>.from(value) : null;
 

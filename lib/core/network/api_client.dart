@@ -59,6 +59,7 @@ class ApiClient {
   Future<Json> get(String path, {Map<String, dynamic>? query}) =>
       _send(() => _dio.get<dynamic>(path, queryParameters: query));
 
+  /// Writes may succeed with an empty body (e.g. 204); that yields `{}`.
   Future<Json> post(String path, Object body, {bool authenticated = true}) =>
       _send(
         () => _dio.post<dynamic>(
@@ -67,19 +68,25 @@ class ApiClient {
           options: Options(extra: {_authKey: authenticated}),
         ),
         authenticated: authenticated,
+        allowEmpty: true,
       );
 
+  /// Writes may succeed with an empty body (e.g. 204); that yields `{}`.
   Future<Json> put(String path, Object body) =>
-      _send(() => _dio.put<dynamic>(path, data: body));
+      _send(() => _dio.put<dynamic>(path, data: body), allowEmpty: true);
 
   Future<Json> _send(
     Future<Response<dynamic>> Function() request, {
     bool authenticated = true,
+    bool allowEmpty = false,
   }) async {
     try {
       final response = await request();
       final data = response.data;
       if (data is Map) return Map<String, dynamic>.from(data);
+      if (allowEmpty && (data == null || (data is String && data.isEmpty))) {
+        return <String, dynamic>{};
+      }
       throw ApiException(
         ApiErrorType.unknown,
         'Unexpected response from the server.',

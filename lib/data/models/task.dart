@@ -55,10 +55,10 @@ class Task extends Equatable {
       status: TaskStatus.fromApi(rawStatus),
       rawStatus: rawStatus,
       priority: TaskPriority.fromApi(readString(json['priority'])),
-      startDate: readDate(
+      startDate: readDateOnly(
         firstOf(json, const ['start_date', 'startedDate', 'startDate']),
       ),
-      dueDate: readDate(firstOf(json, const ['due_date', 'dueDate'])),
+      dueDate: readDateOnly(firstOf(json, const ['due_date', 'dueDate'])),
       createdAt: readDate(firstOf(json, const ['created_at', 'createdAt'])),
       updatedAt: readDate(firstOf(json, const ['updated_at', 'updatedAt'])),
       projectId:
@@ -80,6 +80,8 @@ class Task extends Equatable {
   final TaskStatus? status;
   final String? rawStatus;
   final TaskPriority? priority;
+
+  /// Calendar dates (local midnight, no time): see [readDateOnly].
   final DateTime? startDate;
   final DateTime? dueDate;
   final DateTime? createdAt;

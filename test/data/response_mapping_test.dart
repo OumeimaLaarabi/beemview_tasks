@@ -39,7 +39,7 @@ void main() {
       expect(task.status, TaskStatus.toDo);
       expect(task.priority, TaskPriority.high);
       expect(task.dueDate, isNull);
-      expect(task.startDate, DateTime.utc(2026, 10, 6, 9).toLocal());
+      expect(task.startDate, DateTime(2026, 10, 6));
       expect(task.projectId, 101);
       expect(task.projectName, 'Interview Project');
       expect(task.assignees.single.name, 'Candidate');
@@ -81,7 +81,7 @@ void main() {
 
       expect(task.status, TaskStatus.inProgress);
       expect(task.priority, TaskPriority.high);
-      expect(task.dueDate, DateTime.utc(2026, 10, 10).toLocal());
+      expect(task.dueDate, DateTime(2026, 10, 10));
       expect(task.startDate, isNull);
       expect(task.projectName, 'Interview Project');
       expect(task.description, 'Inspect the assigned site area');
@@ -91,6 +91,17 @@ void main() {
       final comment = Task.fromJson(json).latestComment;
       expect(comment?.content, 'Newest');
       expect(comment?.author?.name, 'Candidate');
+    });
+
+    test('due/start dates keep the calendar day in any time zone', () {
+      final task = Task.fromJson({
+        'id': 9,
+        'name': 'Dates',
+        'due_date': '2026-10-10T00:00:00Z',
+        'start_date': '2026-10-01',
+      });
+      expect(task.dueDate, DateTime(2026, 10, 10));
+      expect(task.startDate, DateTime(2026, 10, 1));
     });
 
     test('tolerates missing optional fields and unknown status', () {
