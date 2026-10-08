@@ -21,8 +21,15 @@ class SessionStorage {
     return _cachedToken;
   }
 
-  Future<void> saveToken(String token) async {
-    await _storage.write(key: _tokenKey, value: token);
+  /// With [persist] false ("Keep me signed in" unchecked) the token lives in
+  /// memory only, and any previously stored token is removed, so the next
+  /// app launch starts at the login screen.
+  Future<void> saveToken(String token, {bool persist = true}) async {
+    if (persist) {
+      await _storage.write(key: _tokenKey, value: token);
+    } else {
+      await _storage.delete(key: _tokenKey);
+    }
     _cachedToken = token;
     _loaded = true;
   }

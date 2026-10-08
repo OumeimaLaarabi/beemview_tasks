@@ -19,6 +19,7 @@ void main() {
     () => repository.login(
       email: any(named: 'email'),
       password: any(named: 'password'),
+      rememberMe: any(named: 'rememberMe'),
     ),
   ).thenAnswer((_) => answer());
 
@@ -83,8 +84,25 @@ void main() {
       () => repository.login(
         email: any(named: 'email'),
         password: any(named: 'password'),
+        rememberMe: any(named: 'rememberMe'),
       ),
     ),
+  );
+
+  blocTest<LoginCubit, LoginState>(
+    'clearError returns a failed form to idle',
+    build: () => LoginCubit(repository),
+    seed: () => const LoginState(status: LoginStatus.failure, error: 'Nope'),
+    act: (cubit) => cubit.clearError(),
+    expect: () => [const LoginState()],
+  );
+
+  blocTest<LoginCubit, LoginState>(
+    'clearError does nothing while submitting',
+    build: () => LoginCubit(repository),
+    seed: () => const LoginState(status: LoginStatus.submitting),
+    act: (cubit) => cubit.clearError(),
+    expect: () => <LoginState>[],
   );
 
   group('LoginValidators', () {

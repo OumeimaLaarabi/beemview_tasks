@@ -17,7 +17,8 @@ void main() {
   setUp(() {
     api = MockApiClient();
     session = MockSessionStorage();
-    when(() => session.saveToken(any())).thenAnswer((_) async {});
+    when(() => session.saveToken(any(), persist: any(named: 'persist')))
+        .thenAnswer((_) async {});
   });
 
   AuthRepository repository(String subdomain) => AuthRepository(
@@ -50,7 +51,7 @@ void main() {
         'subdomain': 'acme',
       }, authenticated: false),
     ).called(1);
-    verify(() => session.saveToken('abc')).called(1);
+    verify(() => session.saveToken('abc', persist: true)).called(1);
   });
 
   test('login fails before any request when no subdomain is configured', () {

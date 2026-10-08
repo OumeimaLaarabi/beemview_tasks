@@ -14,12 +14,20 @@ class LoginCubit extends Cubit<LoginState> {
 
   final AuthRepository _repository;
 
-  Future<void> submit({required String email, required String password}) async {
+  Future<void> submit({
+    required String email,
+    required String password,
+    bool rememberMe = true,
+  }) async {
     // Ignore repeated taps while a request is in flight.
     if (state.isSubmitting) return;
     emit(const LoginState(status: LoginStatus.submitting));
     try {
-      final user = await _repository.login(email: email, password: password);
+      final user = await _repository.login(
+        email: email,
+        password: password,
+        rememberMe: rememberMe,
+      );
       emit(LoginState(status: LoginStatus.success, user: user));
     } on ApiException catch (e) {
       emit(LoginState(status: LoginStatus.failure, error: _messageFor(e)));
@@ -31,6 +39,11 @@ class LoginCubit extends Cubit<LoginState> {
         ),
       );
     }
+  }
+
+  /// Hides a failed sign-in message once the user edits the form.
+  void clearError() {
+    if (state.status == LoginStatus.failure) emit(const LoginState());
   }
 
   static String _messageFor(ApiException e) => switch (e.type) {

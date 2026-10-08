@@ -1,4 +1,6 @@
 {
   "API_ORIGIN": "https://beemview.com",
-  "TENANT_SUBDOMAIN": "your-tenant-subdomain"
+  "TENANT_SUBDOMAIN": "your-tenant-subdomain",
+  "DEV_LOGIN_EMAIL": "",
+  "DEV_LOGIN_PASSWORD": ""
 }

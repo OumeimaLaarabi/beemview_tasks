@@ -18,8 +18,13 @@ class AuthRepository {
 
   /// `POST /auth/login`. The tenant subdomain comes from [AppConfig], not
   /// from the user. 400 = invalid credentials, 403 = inactive account; both
-  /// surface as [ApiException]. The token is persisted on success.
-  Future<User> login({required String email, required String password}) async {
+  /// surface as [ApiException]. On success the token is kept for this run,
+  /// and also persisted across launches when [rememberMe] is true.
+  Future<User> login({
+    required String email,
+    required String password,
+    bool rememberMe = true,
+  }) async {
     if (!_config.isConfigured) {
       throw const ApiException(
         ApiErrorType.unknown,
@@ -39,7 +44,7 @@ class AuthRepository {
         'Login response did not include a session.',
       );
     }
-    await _session.saveToken(token);
+    await _session.saveToken(token, persist: rememberMe);
     return User.fromJson(user);
   }
 
