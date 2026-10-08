@@ -21,7 +21,7 @@ final class ProjectTasksState extends Equatable {
   /// Every task of the project, in API order.
   final List<Task> tasks;
 
-  /// Search text, matched against task name and description.
+  /// Search text, matched against the task name only.
   final String query;
 
   /// Only tasks with this status are shown; null shows all.
@@ -41,9 +41,7 @@ final class ProjectTasksState extends Equatable {
     return [
       for (final task in tasks)
         if ((statusFilter == null || task.status == statusFilter) &&
-            (needle.isEmpty ||
-                task.name.toLowerCase().contains(needle) ||
-                (task.description?.toLowerCase().contains(needle) ?? false)))
+            (needle.isEmpty || task.name.toLowerCase().contains(needle)))
           task,
     ];
   }

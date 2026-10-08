@@ -148,11 +148,10 @@ void main() {
       ],
     );
 
-    test('search matches name or description, ignoring case', () {
+    test('search matches the task name only, ignoring case', () {
       expect(state.copyWith(query: 'SITE').visibleTasks.map((t) => t.id), [1]);
-      expect(state.copyWith(query: 'findings').visibleTasks.map((t) => t.id), [
-        2,
-      ]);
+      // "findings" only appears in a description.
+      expect(state.copyWith(query: 'findings').visibleTasks, isEmpty);
       expect(state.copyWith(query: '   ').visibleTasks, hasLength(4));
     });
 

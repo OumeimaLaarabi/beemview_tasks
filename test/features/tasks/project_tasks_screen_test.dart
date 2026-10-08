@@ -7,6 +7,7 @@ import 'package:beemview_tasks/data/models/task_priority.dart';
 import 'package:beemview_tasks/data/models/task_status.dart';
 import 'package:beemview_tasks/data/repositories/task_repository.dart';
 import 'package:beemview_tasks/features/tasks/project_tasks_screen.dart';
+import 'package:beemview_tasks/features/tasks/task_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +79,18 @@ void main() {
     expect(find.text('Overdue · Jan 15, 2020'), findsOneWidget);
     expect(find.text('Due Jan 15, 2020'), findsOneWidget);
     expect(find.text('Due Mar 1, 2099'), findsOneWidget);
+  });
+
+  testWidgets('tapping a task opens its details', (tester) async {
+    stubTasks(() async => ProjectTasks(project: _project, tasks: _tasks));
+    when(() => repository.fetchTask(3)).thenAnswer((_) async => _tasks[2]);
+    await pump(tester);
+
+    await tester.tap(find.text('Order parts'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskDetailsScreen), findsOneWidget);
+    verify(() => repository.fetchTask(3)).called(1);
   });
 
   testWidgets('search narrows the list', (tester) async {

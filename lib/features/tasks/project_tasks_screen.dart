@@ -11,6 +11,7 @@ import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
 import 'project_tasks_cubit.dart';
 import 'task_badges.dart';
+import 'task_details_screen.dart';
 
 /// Every task of one project, with search and a status filter.
 class ProjectTasksScreen extends StatelessWidget {
@@ -122,7 +123,10 @@ class _Filters extends StatelessWidget {
         if ((counts[status] ?? 0) > 0 || status == state.statusFilter) status,
     ];
 
+    // Search and chips only narrow the tasks already loaded for this
+    // project; they never query the server.
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -131,7 +135,7 @@ class _Filters extends StatelessWidget {
             onChanged: cubit.search,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: 'Search tasks',
+              hintText: 'Filter loaded tasks by name',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: state.query.isEmpty
                   ? null
@@ -155,6 +159,14 @@ class _Filters extends StatelessWidget {
                 borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
             ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 8, 16, 0),
+          child: Text(
+            'Filter loaded tasks by status',
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(color: AppColors.muted),
           ),
         ),
         SizedBox(
@@ -274,44 +286,52 @@ class _TaskCard extends StatelessWidget {
     final assignees = task.assignees.map((p) => p.name).join(', ');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    task.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w700,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => TaskDetailsScreen(task: task),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      task.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                if (task.priority != null) ...[
-                  const SizedBox(width: 8),
-                  PriorityBadge(priority: task.priority!),
+                  if (task.priority != null) ...[
+                    const SizedBox(width: 8),
+                    PriorityBadge(priority: task.priority!),
+                  ],
                 ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                StatusBadge(status: task.status, label: task.statusLabel),
-                if (task.dueDate != null) _DueDate(task: task),
-                if (assignees.isNotEmpty)
-                  _Meta(icon: Icons.person_outline, text: assignees),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  StatusBadge(status: task.status, label: task.statusLabel),
+                  if (task.dueDate != null) _DueDate(task: task),
+                  if (assignees.isNotEmpty)
+                    _Meta(icon: Icons.person_outline, text: assignees),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
