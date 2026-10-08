@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'core/theme/app_theme.dart';
 import 'features/auth/auth_cubit.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/session_error_screen.dart';
@@ -29,7 +30,7 @@ class _BeemviewAppState extends State<BeemviewApp> {
       child: MaterialApp(
         title: 'Beemview Tasks',
         navigatorKey: _navigatorKey,
-        theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.indigo)),
+        theme: AppTheme.light(),
         home: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, state) => switch (state) {
             AuthUnknown() => const SplashScreen(),
