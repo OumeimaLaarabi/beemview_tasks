@@ -104,6 +104,25 @@ void main() {
       expect(task.startDate, DateTime(2026, 10, 1));
     });
 
+    test('isOverdueOn: open tasks past their due day only', () {
+      final today = DateTime(2026, 10, 10, 15, 30);
+      Task task(String status, String? due) => Task.fromJson({
+        'id': 1,
+        'name': 'T',
+        'status': status,
+        'due_date': due,
+      });
+
+      expect(task('to_do', '2026-10-09T00:00:00Z').isOverdueOn(today), isTrue);
+      expect(task('to_do', '2026-10-10T00:00:00Z').isOverdueOn(today), isFalse);
+      expect(task('done', '2026-10-01T00:00:00Z').isOverdueOn(today), isFalse);
+      expect(
+        task('canceled', '2026-10-01T00:00:00Z').isOverdueOn(today),
+        isFalse,
+      );
+      expect(task('to_do', null).isOverdueOn(today), isFalse);
+    });
+
     test('tolerates missing optional fields and unknown status', () {
       final task = Task.fromJson({'id': 9, 'name': 'Bare', 'status': 'new'});
       expect(task.status, isNull);

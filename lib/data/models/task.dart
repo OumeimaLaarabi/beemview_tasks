@@ -96,6 +96,18 @@ class Task extends Equatable {
   /// Human-readable status, falling back to the raw API value.
   String get statusLabel => status?.label ?? rawStatus ?? 'Unknown';
 
+  /// True when [dueDate] is before [today]'s date and the task is still
+  /// open (not done or canceled).
+  bool isOverdueOn(DateTime today) {
+    final due = dueDate;
+    if (due == null ||
+        status == TaskStatus.done ||
+        status == TaskStatus.canceled) {
+      return false;
+    }
+    return due.isBefore(DateTime(today.year, today.month, today.day));
+  }
+
   /// The newest returned comment. Order is not assumed from the API.
   TaskComment? get latestComment {
     if (comments.isEmpty) return null;
