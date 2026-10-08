@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local run configuration (tenant subdomain). Copy config.example.json.
 /config.json
+
+# Generated screenshot images (selected ones are copied to docs/screenshots/).
+/screenshots/goldens/

@@ -57,7 +57,7 @@ class InitialsAvatar extends StatelessWidget {
           initialsOf(name),
           style: TextStyle(
             color: foreground,
-            fontSize: size * 0.36,
+            fontSize: size * 0.34,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -85,7 +85,7 @@ class AvatarStack extends StatelessWidget {
     if (names.isEmpty) return const SizedBox.shrink();
     final shown = names.take(max).toList();
     final extra = names.length - shown.length;
-    final step = size * 0.7;
+    final step = size * 0.8;
     final count = shown.length + (extra > 0 ? 1 : 0);
     return Semantics(
       label: 'Assigned to ${names.join(', ')}',

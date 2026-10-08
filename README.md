@@ -6,6 +6,20 @@ status, optionally with a note that is posted as a comment.
 
 **Core flow:** Login → Projects → Project Tasks → Task Details → Update Status
 
+## Screenshots
+
+| Login | Projects | Project tasks |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/login.png" width="230" alt="Login screen"> | <img src="docs/screenshots/projects.png" width="230" alt="Projects list"> | <img src="docs/screenshots/tasks.png" width="230" alt="Project tasks with search and status filters"> |
+
+| Task details | Change status | Note failed after status saved |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/task_details.png" width="230" alt="Task details"> | <img src="docs/screenshots/change_status.png" width="230" alt="Change status sheet"> | <img src="docs/screenshots/note_failed.png" width="230" alt="Status saved but note failed, with retry comment"> |
+
+The images are rendered from the real widgets with sample data by a golden
+test. Regenerate them with
+`flutter test screenshots --update-goldens` (output in `screenshots/goldens/`).
+
 ## Requirements
 
 | Tool | Version used |
