@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../data/models/project.dart';
 import '../../data/models/user.dart';
 import '../../data/repositories/project_repository.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/brand_logo.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/initials_avatar.dart';
+import '../../widgets/search_field.dart';
 import '../auth/auth_cubit.dart';
 import '../tasks/project_tasks_screen.dart';
 import 'projects_cubit.dart';
@@ -25,19 +30,33 @@ class ProjectsScreen extends StatelessWidget {
   }
 }
 
-class _ProjectsView extends StatelessWidget {
+class _ProjectsView extends StatefulWidget {
   const _ProjectsView({required this.user});
 
   final User user;
 
   @override
+  State<_ProjectsView> createState() => _ProjectsViewState();
+}
+
+class _ProjectsViewState extends State<_ProjectsView> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _search.clear();
+    context.read<ProjectsCubit>().search('');
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cubit = context.read<ProjectsCubit>();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Projects'),
-        actions: [_AccountMenu(user: user)],
-      ),
       body: BlocConsumer<ProjectsCubit, ProjectsState>(
         listenWhen: (previous, current) =>
             current.refreshError != null &&
@@ -45,65 +64,167 @@ class _ProjectsView extends StatelessWidget {
         listener: (context, state) =>
             ScaffoldMessenger.of(context)
                 .showSnackBar(SnackBar(content: Text(state.refreshError!))),
-        builder: (context, state) => switch (state.status) {
-          ProjectsStatus.initial || ProjectsStatus.loading => const Center(
-            child: CircularProgressIndicator(),
+        builder: (context, state) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Header(user: widget.user, state: state),
+            // The search box overlaps the bottom of the header.
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SearchField(
+                  controller: _search,
+                  hint: 'Search loaded projects',
+                  onChanged: cubit.search,
+                ),
+              ),
+            ),
+            Expanded(
+              child: switch (state.status) {
+                ProjectsStatus.initial || ProjectsStatus.loading =>
+                  const Center(child: CircularProgressIndicator()),
+                ProjectsStatus.failure => ErrorView(
+                  message: state.error ?? 'Could not load projects.',
+                  onRetry: cubit.load,
+                ),
+                ProjectsStatus.success => RefreshIndicator(
+                  onRefresh: cubit.refresh,
+                  child: state.projects.isEmpty
+                      ? const ScrollableFill(
+                          child: EmptyView(
+                            icon: Icons.folder_off_outlined,
+                            title: 'No projects available',
+                            message:
+                                'Projects shared with your account will '
+                                'appear here. Pull down to refresh.',
+                          ),
+                        )
+                      : _ProjectList(state: state, onClearSearch: _clearSearch),
+                ),
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Logo, account avatar and the "Projects" title on the gradient.
+class _Header extends StatelessWidget {
+  const _Header({required this.user, required this.state});
+
+  final User user;
+  final ProjectsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = state.total;
+    final subtitle = state.status == ProjectsStatus.success
+        ? '$total ${total == 1 ? 'project' : 'projects'} available to you'
+        : 'Your projects';
+    return GradientHeader(
+      bottomPadding: 52,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const BrandLogo(),
+              const Spacer(),
+              _AccountMenu(user: user),
+            ],
           ),
-          ProjectsStatus.failure => ErrorView(
-            message: state.error ?? 'Could not load projects.',
-            onRetry: cubit.load,
+          const SizedBox(height: 28),
+          const Text(
+            'YOUR WORKSPACE',
+            style: TextStyle(
+              color: AppColors.brandOnDark,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
           ),
-          ProjectsStatus.success => RefreshIndicator(
-            onRefresh: cubit.refresh,
-            child: state.projects.isEmpty
-                ? const ScrollableFill(
-                    child: EmptyView(
-                      icon: Icons.folder_off_outlined,
-                      title: 'No projects available',
-                      message:
-                          'Projects shared with your account will appear '
-                          'here. Pull down to refresh.',
-                    ),
-                  )
-                : _ProjectList(state: state),
+          const SizedBox(height: 6),
+          Semantics(
+            header: true,
+            child: const Text(
+              'Projects',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                letterSpacing: -1,
+                height: 1.15,
+              ),
+            ),
           ),
-        },
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 13),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _ProjectList extends StatelessWidget {
-  const _ProjectList({required this.state});
+  const _ProjectList({required this.state, required this.onClearSearch});
 
   final ProjectsState state;
+  final VoidCallback onClearSearch;
 
   @override
   Widget build(BuildContext context) {
-    final projects = state.projects;
-    final theme = Theme.of(context);
-    // Header + projects + footer.
-    return ListView.builder(
+    final projects = state.visibleProjects;
+    final searching = state.query.trim().isNotEmpty;
+    return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: projects.length + 2,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'Showing ${projects.length} of ${state.total} projects',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Your projects',
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                searching
+                    ? '${projects.length} of ${state.projects.length} '
+                          'loaded projects match'
+                    : 'Showing ${state.projects.length} of ${state.total} '
+                          'projects',
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        if (projects.isEmpty)
+          EmptyView(
+            icon: Icons.search_off,
+            title: 'No matching projects',
+            message: state.hasMore
+                ? 'Only loaded projects are searched. Load more to '
+                      'search the rest.'
+                : 'Try a different name.',
+            action: TextButton(
+              onPressed: onClearSearch,
+              child: const Text('Clear search'),
             ),
-          );
-        }
-        if (index == projects.length + 1) {
-          return _ListFooter(state: state);
-        }
-        return _ProjectCard(project: projects[index - 1]);
-      },
+          ),
+        for (final project in projects) _ProjectCard(project: project),
+        _ListFooter(state: state),
+      ],
     );
   }
 }
@@ -113,29 +234,81 @@ class _ProjectCard extends StatelessWidget {
 
   final Project project;
 
+  /// Icon tile colours, picked from the project id so they stay stable.
+  static const _tints = [
+    (AppColors.brandSoft, AppColors.brand),
+    (Color(0xFFE0ECFF), Color(0xFF2563EB)),
+    (Color(0xFFFFE9D6), Color(0xFFC05621)),
+    (Color(0xFFDDF4EC), Color(0xFF2F855A)),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final name = project.name.trim();
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          child: Text(name.isEmpty ? '?' : name.characters.first.toUpperCase()),
+    final (background, foreground) = _tints[project.id % _tints.length];
+    final radius = BorderRadius.circular(18);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: const BorderSide(color: AppColors.line),
         ),
-        title: Text(project.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: project.description == null
-            ? null
-            : Text(
-                project.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => ProjectTasksScreen(project: project),
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ProjectTasksScreen(project: project),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(Icons.work_outline, color: foreground, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        project.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (project.description != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          project.description!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right, color: AppColors.subtle),
+              ],
+            ),
           ),
         ),
       ),
@@ -151,8 +324,18 @@ class _ListFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final cubit = context.read<ProjectsCubit>();
+    final buttonStyle = OutlinedButton.styleFrom(
+      foregroundColor: AppColors.brand,
+      backgroundColor: AppColors.surface,
+      side: const BorderSide(color: AppColors.line),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(
+        fontFamily: 'Manrope',
+        fontWeight: FontWeight.w700,
+      ),
+    );
 
     final Widget child;
     if (state.isLoadingMore) {
@@ -163,12 +346,13 @@ class _ListFooter extends StatelessWidget {
           Text(
             state.loadMoreError!,
             textAlign: TextAlign.center,
-            style: TextStyle(color: theme.colorScheme.error),
+            style: const TextStyle(color: AppColors.danger, fontSize: 13),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: cubit.loadMore,
-            icon: const Icon(Icons.refresh),
+            style: buttonStyle,
+            icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Retry'),
           ),
         ],
@@ -176,19 +360,18 @@ class _ListFooter extends StatelessWidget {
     } else if (state.hasMore) {
       child = OutlinedButton(
         onPressed: cubit.loadMore,
+        style: buttonStyle,
         child: const Text('Load more'),
       );
     } else {
-      child = Text(
+      child = const Text(
         'All projects loaded',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
+        style: TextStyle(color: AppColors.subtle, fontSize: 12),
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Center(child: child),
     );
   }
@@ -196,6 +379,7 @@ class _ListFooter extends StatelessWidget {
 
 enum _AccountAction { signOut }
 
+/// The user's initials; opens a menu with their name and "Sign out".
 class _AccountMenu extends StatelessWidget {
   const _AccountMenu({required this.user});
 
@@ -205,7 +389,8 @@ class _AccountMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<_AccountAction>(
       tooltip: 'Account',
-      icon: const Icon(Icons.account_circle_outlined),
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (action) => switch (action) {
         _AccountAction.signOut => context.read<AuthCubit>().logout(),
       },
@@ -214,7 +399,13 @@ class _AccountMenu extends StatelessWidget {
           enabled: false,
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(user.fullName),
+            title: Text(
+              user.fullName,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             subtitle: user.email == null ? null : Text(user.email!),
           ),
         ),
@@ -228,6 +419,14 @@ class _AccountMenu extends StatelessWidget {
           ),
         ),
       ],
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+        ),
+        child: InitialsAvatar(name: user.fullName, size: 36),
+      ),
     );
   }
 }

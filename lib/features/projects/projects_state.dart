@@ -12,6 +12,7 @@ final class ProjectsState extends Equatable {
     this.error,
     this.loadMoreError,
     this.refreshError,
+    this.query = '',
   });
 
   final ProjectsStatus status;
@@ -31,6 +32,19 @@ final class ProjectsState extends Equatable {
   /// Pull-to-refresh failed while a list was already shown.
   final String? refreshError;
 
+  /// Search text, matched against the names of the projects loaded so far.
+  final String query;
+
+  /// Loaded projects whose name contains [query], ignoring case.
+  List<Project> get visibleProjects {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return projects;
+    return [
+      for (final project in projects)
+        if (project.name.toLowerCase().contains(needle)) project,
+    ];
+  }
+
   ProjectsState copyWith({
     List<Project>? projects,
     int? total,
@@ -38,6 +52,7 @@ final class ProjectsState extends Equatable {
     bool? isLoadingMore,
     String? loadMoreError,
     String? refreshError,
+    String? query,
     bool clearLoadMoreError = false,
     bool clearRefreshError = false,
   }) => ProjectsState(
@@ -51,6 +66,7 @@ final class ProjectsState extends Equatable {
         ? null
         : loadMoreError ?? this.loadMoreError,
     refreshError: clearRefreshError ? null : refreshError ?? this.refreshError,
+    query: query ?? this.query,
   );
 
   @override
@@ -63,5 +79,6 @@ final class ProjectsState extends Equatable {
     error,
     loadMoreError,
     refreshError,
+    query,
   ];
 }

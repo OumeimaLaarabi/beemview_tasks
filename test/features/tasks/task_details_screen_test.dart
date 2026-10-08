@@ -81,9 +81,10 @@ void main() {
     expect(find.text('Inspect the assigned site area'), findsOneWidget);
     expect(find.text('Oct 1, 2026'), findsOneWidget);
     expect(find.text('Oct 10, 2099'), findsOneWidget);
+    // Candidate is the only assignee; Reviewer wrote the latest comment.
+    expect(find.text('Candidate'), findsOneWidget);
 
     await tester.scrollUntilVisible(find.text('Ready for inspection'), 200);
-    expect(find.text('Candidate'), findsOneWidget);
     expect(find.text('Reviewer'), findsOneWidget);
     expect(find.text('Older comment'), findsNothing);
   });
@@ -95,7 +96,8 @@ void main() {
     // Project name falls back to the list task until details include it.
     expect(find.text('Interview Project'), findsOneWidget);
     expect(find.text('No description'), findsOneWidget);
-    expect(find.text('No dates set'), findsOneWidget);
+    // Due, priority, start, created and updated are all missing.
+    expect(find.text('Not set'), findsNWidgets(5));
     await tester.scrollUntilVisible(find.text('No comments yet'), 200);
     expect(find.text('Unassigned'), findsOneWidget);
   });
@@ -108,8 +110,10 @@ void main() {
     Future<void> openSheetAndSave(WidgetTester tester) async {
       await tester.tap(find.text('Change status'));
       await tester.pumpAndSettle();
-      expect(find.text('In progress (current)'), findsOneWidget);
+      expect(find.text('Current'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('Done'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pump();
       await tester.enterText(note(), 'Inspection finished');

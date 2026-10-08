@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
+
 /// Empty state: icon, title, optional explanation and optional action.
 class EmptyView extends StatelessWidget {
   const EmptyView({
@@ -17,27 +19,32 @@ class EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
+            StateIcon(icon: icon),
+            const SizedBox(height: 18),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             if (message != null) ...[
               const SizedBox(height: 8),
               Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 13,
+                  height: 1.5,
                 ),
               ),
             ],
@@ -45,6 +52,30 @@ class EmptyView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Large icon on a soft tinted circle, used by empty and error states.
+class StateIcon extends StatelessWidget {
+  const StateIcon({
+    super.key,
+    required this.icon,
+    this.color = AppColors.brand,
+    this.background = AppColors.brandSoft,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      child: Icon(icon, size: 32, color: color),
     );
   }
 }

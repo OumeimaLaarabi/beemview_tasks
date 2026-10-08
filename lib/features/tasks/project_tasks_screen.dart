@@ -7,8 +7,11 @@ import '../../data/models/project.dart';
 import '../../data/models/task.dart';
 import '../../data/models/task_status.dart';
 import '../../data/repositories/task_repository.dart';
+import '../../widgets/app_header.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/initials_avatar.dart';
+import '../../widgets/search_field.dart';
 import 'project_tasks_cubit.dart';
 import 'task_badges.dart';
 import 'task_details_screen.dart';
@@ -56,13 +59,6 @@ class _ProjectTasksViewState extends State<_ProjectTasksView> {
   Widget build(BuildContext context) {
     final cubit = context.read<ProjectTasksCubit>();
     return Scaffold(
-      appBar: AppBar(
-        title: BlocSelector<ProjectTasksCubit, ProjectTasksState, String>(
-          selector: (state) => state.project?.name ?? widget.project.name,
-          builder: (context, name) =>
-              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ),
       body: BlocConsumer<ProjectTasksCubit, ProjectTasksState>(
         listenWhen: (previous, current) =>
             current.refreshError != null &&
@@ -70,49 +66,221 @@ class _ProjectTasksViewState extends State<_ProjectTasksView> {
         listener: (context, state) =>
             ScaffoldMessenger.of(context)
                 .showSnackBar(SnackBar(content: Text(state.refreshError!))),
-        builder: (context, state) => switch (state.status) {
-          ProjectTasksStatus.initial || ProjectTasksStatus.loading =>
-            const Center(child: CircularProgressIndicator()),
-          ProjectTasksStatus.failure => ErrorView(
-            message: state.error ?? 'Could not load tasks.',
-            onRetry: cubit.load,
-          ),
-          ProjectTasksStatus.success when state.tasks.isEmpty =>
-            RefreshIndicator(
-              onRefresh: cubit.refresh,
-              child: const ScrollableFill(
-                child: EmptyView(
-                  icon: Icons.task_alt,
-                  title: 'No tasks yet',
-                  message:
-                      'Tasks added to this project will appear here. '
-                      'Pull down to refresh.',
+        builder: (context, state) {
+          final total = state.tasks.length;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GradientHeader(
+                child: HeaderBar(
+                  title: state.project?.name ?? widget.project.name,
+                  subtitle: state.status == ProjectTasksStatus.success
+                      ? '$total ${total == 1 ? 'task' : 'tasks'} loaded'
+                      : 'Project tasks',
                 ),
               ),
-            ),
-          ProjectTasksStatus.success => Column(
-            children: [
-              _Filters(state: state, controller: _search),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: cubit.refresh,
-                  child: _TaskList(state: state, onClearFilters: _clearFilters),
-                ),
+                child: switch (state.status) {
+                  ProjectTasksStatus.initial || ProjectTasksStatus.loading =>
+                    const Center(child: CircularProgressIndicator()),
+                  ProjectTasksStatus.failure => ErrorView(
+                    message: state.error ?? 'Could not load tasks.',
+                    onRetry: cubit.load,
+                  ),
+                  ProjectTasksStatus.success when state.tasks.isEmpty =>
+                    RefreshIndicator(
+                      onRefresh: cubit.refresh,
+                      child: const ScrollableFill(
+                        child: EmptyView(
+                          icon: Icons.task_alt,
+                          title: 'No tasks yet',
+                          message:
+                              'Tasks added to this project will appear '
+                              'here. Pull down to refresh.',
+                        ),
+                      ),
+                    ),
+                  ProjectTasksStatus.success => RefreshIndicator(
+                    onRefresh: cubit.refresh,
+                    child: _TaskList(
+                      state: state,
+                      search: _search,
+                      onClearFilters: _clearFilters,
+                    ),
+                  ),
+                },
               ),
             ],
-          ),
+          );
         },
       ),
     );
   }
 }
 
-/// Search box and one chip per status present in the project.
-class _Filters extends StatelessWidget {
-  const _Filters({required this.state, required this.controller});
+/// Overview, filters and task cards in one scrolling list.
+class _TaskList extends StatelessWidget {
+  const _TaskList({
+    required this.state,
+    required this.search,
+    required this.onClearFilters,
+  });
 
   final ProjectTasksState state;
-  final TextEditingController controller;
+  final TextEditingController search;
+  final VoidCallback onClearFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ProjectTasksCubit>();
+    final tasks = state.visibleTasks;
+    final total = state.tasks.length;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        _Overview(tasks: state.tasks),
+        const SizedBox(height: 14),
+        // Search and chips only narrow the tasks already loaded for this
+        // project; they never query the server.
+        SearchField(
+          controller: search,
+          hint: 'Filter loaded tasks by name',
+          onChanged: cubit.search,
+        ),
+        const SizedBox(height: 12),
+        const Padding(
+          padding: EdgeInsets.only(left: 4),
+          child: Text(
+            'Filter loaded tasks by status',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _StatusFilters(state: state),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            state.isFiltered
+                ? 'Showing ${tasks.length} of $total tasks'
+                : '$total ${total == 1 ? 'task' : 'tasks'}',
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (tasks.isEmpty)
+          EmptyView(
+            icon: Icons.search_off,
+            title: 'No matching tasks',
+            message: 'Try a different search or status.',
+            action: TextButton(
+              onPressed: onClearFilters,
+              child: const Text('Clear filters'),
+            ),
+          ),
+        for (final task in tasks) _TaskCard(task: task),
+      ],
+    );
+  }
+}
+
+/// Counts worked out from the loaded statuses. No percentage is shown:
+/// progress is tracked through status only.
+class _Overview extends StatelessWidget {
+  const _Overview({required this.tasks});
+
+  final List<Task> tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final done = tasks.where((t) => t.status == TaskStatus.done).length;
+    final open = tasks
+        .where(
+          (t) => t.status != TaskStatus.done && t.status != TaskStatus.canceled,
+        )
+        .length;
+    final overdue = tasks.where((t) => t.isOverdueOn(today)).length;
+    return _Card(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Overview',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _Stat(value: open, label: 'Open'),
+              _Stat(value: done, label: 'Done'),
+              _Stat(
+                value: overdue,
+                label: 'Overdue',
+                color: overdue > 0 ? AppColors.danger : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label, this.color});
+
+  final int value;
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        label: '$value $label',
+        child: ExcludeSemantics(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$value',
+                style: TextStyle(
+                  color: color ?? AppColors.ink,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                label,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "All" plus one pill per status present in the project.
+class _StatusFilters extends StatelessWidget {
+  const _StatusFilters({required this.state});
+
+  final ProjectTasksState state;
 
   @override
   Widget build(BuildContext context) {
@@ -122,155 +290,81 @@ class _Filters extends StatelessWidget {
       for (final status in TaskStatus.values)
         if ((counts[status] ?? 0) > 0 || status == state.statusFilter) status,
     ];
-
-    // Search and chips only narrow the tasks already loaded for this
-    // project; they never query the server.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: TextField(
-            controller: controller,
-            onChanged: cubit.search,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Filter loaded tasks by name',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: state.query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        controller.clear();
-                        cubit.search('');
-                      },
-                    ),
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: AppColors.fieldBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: AppColors.fieldBorder),
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _FilterPill(
+            label: 'All',
+            count: state.tasks.length,
+            selected: state.statusFilter == null,
+            onTap: () => cubit.filterByStatus(null),
+          ),
+          for (final status in statuses)
+            _FilterPill(
+              label: status.label,
+              count: counts[status] ?? 0,
+              selected: state.statusFilter == status,
+              // Tapping the selected pill again goes back to "All".
+              onTap: () => cubit.filterByStatus(
+                state.statusFilter == status ? null : status,
               ),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 16, 0),
-          child: Text(
-            'Filter loaded tasks by status',
-            style: Theme.of(context).textTheme.labelMedium
-                ?.copyWith(color: AppColors.muted),
-          ),
-        ),
-        SizedBox(
-          height: 52,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            children: [
-              _StatusChip(
-                label: 'All',
-                count: state.tasks.length,
-                selected: state.statusFilter == null,
-                onSelected: (_) => cubit.filterByStatus(null),
-              ),
-              for (final status in statuses)
-                _StatusChip(
-                  label: status.label,
-                  count: counts[status] ?? 0,
-                  selected: state.statusFilter == status,
-                  // Tapping the selected chip again goes back to "All".
-                  onSelected: (selected) =>
-                      cubit.filterByStatus(selected ? status : null),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final ValueChanged<bool> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text('$label · $count'),
-        selected: selected,
-        onSelected: onSelected,
-        showCheckmark: false,
+        ],
       ),
     );
   }
 }
 
-class _TaskList extends StatelessWidget {
-  const _TaskList({required this.state, required this.onClearFilters});
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final ProjectTasksState state;
-  final VoidCallback onClearFilters;
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final tasks = state.visibleTasks;
-    if (tasks.isEmpty) {
-      return ScrollableFill(
-        child: EmptyView(
-          icon: Icons.search_off,
-          title: 'No matching tasks',
-          message: 'Try a different search or status.',
-          action: TextButton(
-            onPressed: onClearFilters,
-            child: const Text('Clear filters'),
+    final radius = BorderRadius.circular(999);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? AppColors.brand : AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(
+              color: selected ? AppColors.brand : AppColors.line,
+            ),
           ),
-        ),
-      );
-    }
-
-    final theme = Theme.of(context);
-    final total = state.tasks.length;
-    // Header + tasks.
-    return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      itemCount: tasks.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              state.isFiltered
-                  ? 'Showing ${tasks.length} of $total tasks'
-                  : '$total ${total == 1 ? 'task' : 'tasks'}',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Center(
+                child: Text(
+                  '$label · $count',
+                  style: TextStyle(
+                    color: selected ? Colors.white : AppColors.ink,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-          );
-        }
-        return _TaskCard(task: tasks[index - 1]);
-      },
+          ),
+        ),
+      ),
     );
   }
 }
@@ -298,59 +392,55 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final assignees = task.assignees.map((p) => p.name).join(', ');
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _Card(
         onTap: () => _openDetails(context),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      task.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (task.priority != null) ...[
-                    const SizedBox(width: 8),
-                    PriorityBadge(priority: task.priority!),
-                  ],
-                ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Wraps to two lines on narrow screens or with large text.
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                StatusBadge(status: task.status, label: task.statusLabel),
+                if (task.priority != null)
+                  PriorityBadge(priority: task.priority!),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              task.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  StatusBadge(status: task.status, label: task.statusLabel),
-                  if (task.dueDate != null) _DueDate(task: task),
-                  if (assignees.isNotEmpty)
-                    _Meta(icon: Icons.person_outline, text: assignees),
-                ],
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.line),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _DueDate(task: task)),
+                AvatarStack(
+                  names: [for (final person in task.assignees) person.name],
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// "Due Oct 10, 2026", "Due today", or a red "Overdue · Oct 10, 2026".
+/// "Nov 16, 2026", "Today", a red "Overdue · Sep 30, 2026", or
+/// "No due date".
 class _DueDate extends StatelessWidget {
   const _DueDate({required this.task});
 
@@ -358,42 +448,26 @@ class _DueDate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final due = task.dueDate!;
+    final due = task.dueDate;
     final today = DateUtils.dateOnly(DateTime.now());
-    final formatted = DateFormat.yMMMd().format(due);
-    final overdue = task.isOverdueOn(today);
     final String text;
-    if (overdue) {
-      text = 'Overdue · $formatted';
+    var color = AppColors.muted;
+    if (due == null) {
+      text = 'No due date';
+      color = AppColors.subtle;
+    } else if (task.isOverdueOn(today)) {
+      text = 'Overdue · ${DateFormat.yMMMd().format(due)}';
+      color = AppColors.danger;
     } else if (DateUtils.isSameDay(due, today)) {
       text = 'Due today';
+      color = AppColors.danger;
     } else {
-      text = 'Due $formatted';
+      text = 'Due ${DateFormat.yMMMd().format(due)}';
     }
-    return _Meta(
-      icon: Icons.event_outlined,
-      text: text,
-      color: overdue ? AppColors.danger : null,
-    );
-  }
-}
-
-/// Small icon + text line used for due date and assignees.
-class _Meta extends StatelessWidget {
-  const _Meta({required this.icon, required this.text, this.color});
-
-  final IconData icon;
-  final String text;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = this.color ?? AppColors.muted;
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 4),
+        Icon(Icons.event_outlined, size: 16, color: color),
+        const SizedBox(width: 6),
         Flexible(
           child: Text(
             text,
@@ -407,6 +481,36 @@ class _Meta extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// White rounded card with a hairline border; tappable when [onTap] is set.
+class _Card extends StatelessWidget {
+  const _Card({
+    required this.child,
+    this.onTap,
+    this.padding = const EdgeInsets.all(14),
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(16);
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: const BorderSide(color: AppColors.line),
+      ),
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(padding: padding, child: child),
+      ),
     );
   }
 }

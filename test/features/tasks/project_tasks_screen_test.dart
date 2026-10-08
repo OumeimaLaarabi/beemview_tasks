@@ -51,7 +51,14 @@ void main() {
   void stubTasks(Future<ProjectTasks> Function() answer) =>
       when(() => repository.fetchProjectTasks(101)).thenAnswer((_) => answer());
 
-  Future<void> pump(WidgetTester tester) async {
+  /// [tall] gives the list room to build every card without scrolling.
+  Future<void> pump(WidgetTester tester, {bool tall = true}) async {
+    if (tall) {
+      tester.view
+        ..physicalSize = const Size(800, 2400)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
     await tester.pumpWidget(
       RepositoryProvider<TaskRepository>.value(
         value: repository,
@@ -67,6 +74,7 @@ void main() {
   testWidgets('lists tasks with status, priority, due date and assignee', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     stubTasks(() async => ProjectTasks(project: _project, tasks: _tasks));
     await pump(tester);
 
@@ -74,11 +82,17 @@ void main() {
     expect(find.text('3 tasks'), findsOneWidget);
     expect(find.text('Site inspection'), findsOneWidget);
     expect(find.text('High'), findsOneWidget);
-    expect(find.text('Candidate'), findsOneWidget);
+    // Cards show initials; the full names are in the accessibility label,
+    // which the tappable card merges with the rest of its content.
+    expect(
+      find.bySemanticsLabel(RegExp('Assigned to Candidate')),
+      findsOneWidget,
+    );
     // Open and past due: overdue. Done and past due: not overdue.
     expect(find.text('Overdue · Jan 15, 2020'), findsOneWidget);
     expect(find.text('Due Jan 15, 2020'), findsOneWidget);
     expect(find.text('Due Mar 1, 2099'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('tapping a task opens its details', (tester) async {
@@ -189,7 +203,7 @@ void main() {
         ],
       ),
     );
-    await pump(tester);
+    await pump(tester, tall: false);
 
     expect(tester.takeException(), isNull);
   });

@@ -31,14 +31,20 @@ class ProjectsCubit extends Cubit<ProjectsState> {
   Future<void> load() async {
     if (state.status == ProjectsStatus.loading) return;
     final generation = ++_generation;
-    emit(const ProjectsState(status: ProjectsStatus.loading));
+    emit(ProjectsState(status: ProjectsStatus.loading, query: state.query));
     try {
       final page = await _repository.fetchProjects(limit: pageSize);
       if (_isStale(generation)) return;
       emit(_firstPage(page));
     } catch (e) {
       if (_isStale(generation)) return;
-      emit(ProjectsState(status: ProjectsStatus.failure, error: _message(e)));
+      emit(
+        ProjectsState(
+          status: ProjectsStatus.failure,
+          error: _message(e),
+          query: state.query,
+        ),
+      );
     }
   }
 
@@ -106,7 +112,13 @@ class ProjectsCubit extends Cubit<ProjectsState> {
       projects: page.items,
       total: page.total,
       hasMore: page.items.isNotEmpty && _nextOffset < page.total,
+      query: state.query,
     );
+  }
+
+  /// Filters the loaded projects by name; the server is not queried.
+  void search(String query) {
+    if (query != state.query) emit(state.copyWith(query: query));
   }
 
   /// True when the cubit was closed (e.g. logged out by a 401) or a newer
