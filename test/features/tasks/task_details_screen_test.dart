@@ -1,6 +1,7 @@
 import 'package:beemview_tasks/core/network/api_exception.dart';
 import 'package:beemview_tasks/core/theme/app_theme.dart';
 import 'package:beemview_tasks/data/models/task.dart';
+import 'package:beemview_tasks/data/models/task_status.dart';
 import 'package:beemview_tasks/data/repositories/task_repository.dart';
 import 'package:beemview_tasks/features/tasks/task_details_screen.dart';
 import 'package:flutter/material.dart';
@@ -97,6 +98,103 @@ void main() {
     expect(find.text('No dates set'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('No comments yet'), 200);
     expect(find.text('Unassigned'), findsOneWidget);
+  });
+
+  group('change status', () {
+    setUpAll(() => registerFallbackValue(TaskStatus.toDo));
+
+    Finder note() => find.widgetWithText(TextField, 'Note (optional)');
+
+    Future<void> openSheetAndSave(WidgetTester tester) async {
+      await tester.tap(find.text('Change status'));
+      await tester.pumpAndSettle();
+      expect(find.text('In progress (current)'), findsOneWidget);
+
+      await tester.tap(find.text('Done'));
+      await tester.pump();
+      await tester.enterText(note(), 'Inspection finished');
+      await tester.ensureVisible(find.text('Save status'));
+      await tester.tap(find.text('Save status'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('saves status then note, closes and refreshes details', (
+      tester,
+    ) async {
+      stubTask(() async => _detail);
+      when(() => repository.updateStatus(501, TaskStatus.done))
+          .thenAnswer((_) async {});
+      when(() => repository.addComment(501, any()))
+          .thenAnswer((_) async => null);
+      await pump(tester);
+
+      await openSheetAndSave(tester);
+
+      verifyInOrder([
+        () => repository.updateStatus(501, TaskStatus.done),
+        () => repository.addComment(501, 'Inspection finished'),
+      ]);
+      expect(find.text('Save status'), findsNothing);
+      expect(find.text('Status changed to Done.'), findsOneWidget);
+      // Initial load + refresh after the update.
+      verify(() => repository.fetchTask(501)).called(2);
+    });
+
+    testWidgets('a failed note keeps the text and retries only the comment', (
+      tester,
+    ) async {
+      stubTask(() async => _detail);
+      when(() => repository.updateStatus(501, TaskStatus.done))
+          .thenAnswer((_) async {});
+      var comments = 0;
+      when(() => repository.addComment(501, any())).thenAnswer((_) async {
+        if (comments++ == 0) {
+          throw const ApiException(ApiErrorType.server, 'Server error');
+        }
+        return null;
+      });
+      await pump(tester);
+
+      await openSheetAndSave(tester);
+
+      expect(
+        find.text('Status saved, but the note was not posted'),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<TextField>(note()).controller!.text,
+        'Inspection finished',
+      );
+
+      await tester.ensureVisible(find.text('Retry comment'));
+      await tester.tap(find.text('Retry comment'));
+      await tester.pumpAndSettle();
+
+      verify(() => repository.updateStatus(501, TaskStatus.done)).called(1);
+      verify(() => repository.addComment(501, 'Inspection finished')).called(2);
+      expect(find.text('Status changed to Done.'), findsOneWidget);
+    });
+
+    testWidgets('closing after a failed note says the note was not posted', (
+      tester,
+    ) async {
+      stubTask(() async => _detail);
+      when(() => repository.updateStatus(501, TaskStatus.done))
+          .thenAnswer((_) async {});
+      when(() => repository.addComment(501, any()))
+          .thenThrow(const ApiException(ApiErrorType.server, 'Server error'));
+      await pump(tester);
+
+      await openSheetAndSave(tester);
+      await tester.ensureVisible(find.text('Close without posting the note'));
+      await tester.tap(find.text('Close without posting the note'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Status changed to Done. Your note was not posted.'),
+        findsOneWidget,
+      );
+    });
   });
 
   testWidgets('a failed load shows the error and retries', (tester) async {

@@ -280,6 +280,22 @@ class _TaskCard extends StatelessWidget {
 
   final Task task;
 
+  /// Opens the details; if a status was saved there, reloads the list once
+  /// the user comes back so the card shows the new status.
+  Future<void> _openDetails(BuildContext context) async {
+    final tasks = context.read<ProjectTasksCubit>();
+    var statusSaved = false;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TaskDetailsScreen(
+          task: task,
+          onStatusSaved: () => statusSaved = true,
+        ),
+      ),
+    );
+    if (statusSaved && !tasks.isClosed) await tasks.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -288,11 +304,7 @@ class _TaskCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => TaskDetailsScreen(task: task),
-          ),
-        ),
+        onTap: () => _openDetails(context),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(

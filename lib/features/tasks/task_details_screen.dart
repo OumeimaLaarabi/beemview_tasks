@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -8,36 +10,96 @@ import '../../data/models/task.dart';
 import '../../data/models/task_comment.dart';
 import '../../data/repositories/task_repository.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/primary_button.dart';
 import 'task_badges.dart';
 import 'task_details_cubit.dart';
+import 'update_status_cubit.dart';
+import 'update_status_sheet.dart';
 
 /// Full details of one task. [task] is the list-route version, used for the
 /// title and as a fallback for the project name until details arrive.
 class TaskDetailsScreen extends StatelessWidget {
-  const TaskDetailsScreen({super.key, required this.task});
+  const TaskDetailsScreen({super.key, required this.task, this.onStatusSaved});
 
   final Task task;
+
+  /// Called after a new status was saved, so the caller can reload its list.
+  final VoidCallback? onStatusSaved;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) =>
           TaskDetailsCubit(context.read<TaskRepository>(), task.id)..load(),
-      child: _TaskDetailsView(listTask: task),
+      child: _TaskDetailsView(listTask: task, onStatusSaved: onStatusSaved),
     );
   }
 }
 
 class _TaskDetailsView extends StatelessWidget {
-  const _TaskDetailsView({required this.listTask});
+  const _TaskDetailsView({required this.listTask, this.onStatusSaved});
 
   final Task listTask;
+  final VoidCallback? onStatusSaved;
+
+  /// Opens the status sheet; afterwards re-fetches details if the status was
+  /// saved and tells the user what happened to the note.
+  Future<void> _changeStatus(BuildContext context, Task task) async {
+    final details = context.read<TaskDetailsCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final form = UpdateStatusCubit(
+      context.read<TaskRepository>(),
+      taskId: task.id,
+      current: task.status,
+    );
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (_) => BlocProvider.value(
+        value: form,
+        child: UpdateStatusSheet(taskName: task.name),
+      ),
+    );
+    final result = form.state;
+    await form.close();
+    // Also covers a 401 meanwhile, which pops every route back to login.
+    if (!result.statusSaved || !context.mounted) return;
+
+    onStatusSaved?.call();
+    unawaited(details.refresh());
+    final label = result.selected?.label ?? 'the new status';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.phase == UpdateStatusPhase.done
+              ? 'Status changed to $label.'
+              : 'Status changed to $label. Your note was not posted.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<TaskDetailsCubit>();
     return Scaffold(
       appBar: AppBar(title: const Text('Task details')),
+      bottomNavigationBar: BlocBuilder<TaskDetailsCubit, TaskDetailsState>(
+        buildWhen: (previous, current) => previous.task != current.task,
+        builder: (context, state) {
+          final task = state.task;
+          if (task == null) return const SizedBox.shrink();
+          return SafeArea(
+            minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: PrimaryButton(
+              label: 'Change status',
+              onPressed: () => _changeStatus(context, task),
+            ),
+          );
+        },
+      ),
       body: BlocConsumer<TaskDetailsCubit, TaskDetailsState>(
         listenWhen: (previous, current) =>
             current.refreshError != null &&
