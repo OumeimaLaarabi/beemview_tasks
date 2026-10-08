@@ -68,8 +68,6 @@ void main() {
   });
 
   test('a JSON object body is returned as-is', () async {
-    expect(await client(200, '{"ok":true}').put('/tasks/1', {}), {
-      'ok': true,
-    });
+    expect(await client(200, '{"ok":true}').put('/tasks/1', {}), {'ok': true});
   });
 }

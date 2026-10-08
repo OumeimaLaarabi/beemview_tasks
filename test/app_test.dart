@@ -69,7 +69,7 @@ void main() {
     await pumpApp(tester, const AuthUnauthenticated());
     expect(find.byType(LoginScreen), findsOneWidget);
     // Only email and password: the subdomain comes from configuration.
-    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.byType(TextField), findsNWidgets(2));
     expect(find.textContaining('ubdomain'), findsNothing);
   });
 
